@@ -1,0 +1,2162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TrueCost Router — The Price Reversal Phenomenon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;1,300&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet"/>
+<style>
+/* ═══════════════════════════════════════════════════════
+   RESET & VARS
+═══════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+
+:root {
+  --ink:    #07090f;
+  --ink2:   #0b0e18;
+  --ink3:   #111520;
+  --teal:   #00e8c6;
+  --teal2:  #00b89a;
+  --amber:  #f59e0b;
+  --rose:   #f43f5e;
+  --indigo: #6366f1;
+  --text:   #cdd5e0;
+  --muted:  #3d4a5c;
+  --bright: #e8edf5;
+  --border: rgba(255,255,255,0.05);
+  --border-teal: rgba(0,232,198,0.18);
+  --glow-teal: 0 0 60px rgba(0,232,198,0.12);
+  --glow-amber: 0 0 60px rgba(245,158,11,0.12);
+}
+
+body {
+  background: var(--ink);
+  color: var(--text);
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 300;
+  cursor: none;
+  overflow-x: hidden;
+  line-height: 1.6;
+}
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: var(--ink); }
+::-webkit-scrollbar-thumb { background: var(--teal); border-radius: 2px; }
+a { color: inherit; text-decoration: none; }
+
+/* ═══════════════════════════════════════════════════════
+   CUSTOM CURSOR
+═══════════════════════════════════════════════════════ */
+#cursor-dot {
+  position: fixed; top: 0; left: 0; z-index: 9999;
+  width: 8px; height: 8px;
+  background: var(--teal);
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: width 0.15s, height 0.15s, background 0.15s;
+  box-shadow: 0 0 10px var(--teal), 0 0 20px rgba(0,232,198,0.3);
+  will-change: transform;
+}
+#cursor-ring {
+  position: fixed; top: 0; left: 0; z-index: 9998;
+  width: 36px; height: 36px;
+  border: 1px solid rgba(0,232,198,0.4);
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: width 0.3s cubic-bezier(0.34,1.56,0.64,1),
+              height 0.3s cubic-bezier(0.34,1.56,0.64,1),
+              border-color 0.3s;
+  will-change: transform;
+}
+body.cursor-hover #cursor-dot { width: 14px; height: 14px; }
+body.cursor-hover #cursor-ring { width: 56px; height: 56px; border-color: rgba(0,232,198,0.7); }
+body.cursor-click #cursor-dot { width: 4px; height: 4px; }
+
+/* ═══════════════════════════════════════════════════════
+   CURSOR TRAIL CANVAS
+═══════════════════════════════════════════════════════ */
+#trail-canvas {
+  position: fixed; inset: 0; z-index: 9997;
+  pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════════
+   GRAIN OVERLAY
+═══════════════════════════════════════════════════════ */
+#grain {
+  position: fixed; inset: -200%;
+  width: 400%; height: 400%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)' opacity='1'/%3E%3C/svg%3E");
+  opacity: 0.028;
+  pointer-events: none;
+  z-index: 9990;
+  animation: grain-shift 8s steps(2) infinite;
+}
+@keyframes grain-shift {
+  0%,100% { transform: translate(0,0); }
+  10% { transform: translate(-2%,-3%); }
+  20% { transform: translate(1%,2%); }
+  30% { transform: translate(-3%,1%); }
+  40% { transform: translate(2%,-1%); }
+  50% { transform: translate(-1%,3%); }
+  60% { transform: translate(3%,-2%); }
+  70% { transform: translate(-2%,1%); }
+  80% { transform: translate(1%,-3%); }
+  90% { transform: translate(-1%,2%); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   TICKER TAPE
+═══════════════════════════════════════════════════════ */
+#ticker {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  height: 28px;
+  background: var(--teal);
+  overflow: hidden;
+  display: flex; align-items: center;
+}
+.ticker-inner {
+  display: flex; gap: 0;
+  animation: ticker-run 28s linear infinite;
+  white-space: nowrap;
+  will-change: transform;
+}
+@keyframes ticker-run {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.ticker-item {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.63rem; font-weight: 500;
+  color: var(--ink);
+  padding: 0 2.5rem;
+  letter-spacing: 0.08em;
+  display: flex; align-items: center; gap: 1rem;
+}
+.ticker-item .sep { opacity: 0.4; }
+
+/* ═══════════════════════════════════════════════════════
+   NAV
+═══════════════════════════════════════════════════════ */
+nav {
+  position: fixed; top: 28px; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1.2rem 2.5rem;
+  background: rgba(7,9,15,0.75);
+  backdrop-filter: blur(24px) saturate(1.8);
+  border-bottom: 1px solid var(--border);
+}
+.nav-logo {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem; font-weight: 500;
+  color: var(--teal);
+  letter-spacing: 0.04em;
+  display: flex; align-items: center; gap: 10px;
+}
+.nav-logo-indicator {
+  display: flex; align-items: center; gap: 5px;
+}
+.live-dot {
+  width: 5px; height: 5px;
+  background: #22c55e;
+  border-radius: 50%;
+  box-shadow: 0 0 6px #22c55e;
+  animation: live-pulse 2s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%,100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
+}
+.live-text { font-size: 0.58rem; color: #22c55e; letter-spacing: 0.1em; }
+.nav-links { display: flex; gap: 2.5rem; }
+.nav-links a {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem; color: var(--muted);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  transition: color 0.2s;
+  position: relative;
+}
+.nav-links a::after {
+  content: '';
+  position: absolute; bottom: -4px; left: 0; right: 0;
+  height: 1px; background: var(--teal);
+  transform: scaleX(0); transition: transform 0.25s;
+}
+.nav-links a:hover { color: var(--teal); }
+.nav-links a:hover::after { transform: scaleX(1); }
+.nav-pill {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem; font-weight: 500;
+  color: var(--ink);
+  background: var(--teal);
+  border: none; border-radius: 3px;
+  padding: 0.45rem 1.1rem;
+  cursor: none;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: all 0.2s;
+  position: relative; overflow: hidden;
+}
+.nav-pill::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: rgba(255,255,255,0.2);
+  transform: translateX(-100%);
+  transition: transform 0.3s;
+}
+.nav-pill:hover::after { transform: translateX(0); }
+
+/* ═══════════════════════════════════════════════════════
+   HERO
+═══════════════════════════════════════════════════════ */
+#hero {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: flex-start; justify-content: center;
+  padding: 10rem 2.5rem 4rem;
+  position: relative; overflow: hidden;
+}
+#aurora-canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+
+.hero-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem; font-weight: 400;
+  color: var(--teal);
+  letter-spacing: 0.15em; text-transform: uppercase;
+  margin-bottom: 1.5rem;
+  display: flex; align-items: center; gap: 12px;
+  opacity: 0; animation: slide-up 0.8s 0.2s ease forwards;
+}
+.eyebrow-line {
+  width: 40px; height: 1px;
+  background: var(--teal);
+  animation: expand-line 0.8s 0.6s ease forwards;
+  transform-origin: left;
+  transform: scaleX(0);
+}
+@keyframes expand-line { to { transform: scaleX(1); } }
+
+.hero-h1 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(4.5rem, 11vw, 11rem);
+  font-weight: 400;
+  line-height: 0.92;
+  letter-spacing: -0.01em;
+  margin-bottom: 2rem;
+  max-width: 900px;
+  opacity: 0; animation: slide-up 0.9s 0.3s cubic-bezier(0.16,1,0.3,1) forwards;
+}
+.hero-h1 .line1 { display: block; color: var(--bright); }
+.hero-h1 .line2 { display: block; color: var(--teal); position: relative; }
+.hero-h1 .line3 { display: block; color: var(--bright); }
+.hero-h1 .line3 em {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  color: var(--amber);
+}
+
+/* Glitch on hover */
+.glitch-wrap { position: relative; display: inline-block; }
+.glitch-wrap::before,
+.glitch-wrap::after {
+  content: attr(data-text);
+  position: absolute; top: 0; left: 0;
+  width: 100%; overflow: hidden;
+  clip-path: inset(0);
+}
+.glitch-wrap::before {
+  color: var(--rose);
+  text-shadow: -2px 0 var(--rose);
+  animation: glitch-before 4s steps(2) infinite;
+}
+.glitch-wrap::after {
+  color: var(--indigo);
+  text-shadow: 2px 0 var(--indigo);
+  animation: glitch-after 4s steps(2) infinite;
+}
+@keyframes glitch-before {
+  0%,90%,100% { clip-path: inset(100% 0 0 0); transform: translate(0); }
+  92% { clip-path: inset(20% 0 60% 0); transform: translate(-3px, 1px); }
+  94% { clip-path: inset(55% 0 25% 0); transform: translate(2px, -1px); }
+  96% { clip-path: inset(80% 0 5% 0); transform: translate(-1px, 2px); }
+}
+@keyframes glitch-after {
+  0%,90%,100% { clip-path: inset(100% 0 0 0); transform: translate(0); }
+  93% { clip-path: inset(40% 0 43% 0); transform: translate(3px, -1px); }
+  95% { clip-path: inset(5% 0 85% 0); transform: translate(-2px, 1px); }
+  97% { clip-path: inset(70% 0 10% 0); transform: translate(1px, -2px); }
+}
+
+.hero-sub {
+  font-size: 1rem; font-weight: 300; color: var(--text);
+  max-width: 520px; line-height: 1.75;
+  margin-bottom: 2.5rem;
+  opacity: 0; animation: slide-up 0.9s 0.5s ease forwards;
+}
+.hero-sub strong { color: var(--bright); font-weight: 500; }
+
+.hero-actions {
+  display: flex; gap: 1rem; flex-wrap: wrap;
+  opacity: 0; animation: slide-up 0.9s 0.65s ease forwards;
+}
+
+/* Magnetic buttons */
+.mag-btn {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem; font-weight: 500;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 0.85rem 2.2rem;
+  border-radius: 4px;
+  cursor: none;
+  transition: box-shadow 0.3s;
+  position: relative; display: inline-block;
+  overflow: hidden;
+}
+.mag-btn-primary {
+  background: var(--teal); color: var(--ink);
+  border: none;
+}
+.mag-btn-primary:hover { box-shadow: 0 0 40px rgba(0,232,198,0.5), 0 0 80px rgba(0,232,198,0.2); }
+.mag-btn-ghost {
+  background: transparent; color: var(--text);
+  border: 1px solid var(--border);
+}
+.mag-btn-ghost:hover { border-color: var(--border-teal); color: var(--teal); }
+
+/* Ripple on click */
+.mag-btn .ripple {
+  position: absolute;
+  width: 4px; height: 4px;
+  background: rgba(255,255,255,0.3);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: ripple-out 0.6s ease-out forwards;
+}
+@keyframes ripple-out {
+  to { transform: scale(80); opacity: 0; }
+}
+
+/* Hero floating stat cards */
+.hero-float {
+  position: absolute; right: 5%; top: 50%;
+  transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 1rem;
+  opacity: 0; animation: slide-left 1s 1s ease forwards;
+}
+@keyframes slide-left {
+  from { opacity: 0; transform: translateY(-50%) translateX(40px); }
+  to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+.float-card {
+  background: rgba(11,14,24,0.85);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.4rem;
+  backdrop-filter: blur(20px);
+  min-width: 180px;
+  transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+}
+.float-card:hover {
+  border-color: var(--border-teal);
+  box-shadow: var(--glow-teal);
+  transform: translateX(-4px);
+}
+.float-card .fc-num {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.2rem; line-height: 1;
+  color: var(--teal); display: block;
+}
+.float-card .fc-num.amber { color: var(--amber); }
+.float-card .fc-num.rose { color: var(--rose); }
+.float-card .fc-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.58rem; color: var(--muted);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  margin-top: 0.2rem;
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   MARQUEE STRIP
+═══════════════════════════════════════════════════════ */
+.marquee-strip {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden; padding: 0;
+  background: var(--ink2);
+  position: relative; z-index: 1;
+}
+.marquee-inner {
+  display: flex;
+  animation: marquee 22s linear infinite;
+  width: max-content;
+}
+.marquee-inner:hover { animation-play-state: paused; }
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.marquee-item {
+  font-family: 'Instrument Serif', serif;
+  font-style: italic;
+  font-size: 1.1rem; color: var(--muted);
+  padding: 0.9rem 2rem;
+  white-space: nowrap;
+  display: flex; align-items: center; gap: 2rem;
+}
+.marquee-item .mi-accent { color: var(--teal); font-style: normal; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; }
+.marquee-item .mi-amber { color: var(--amber); }
+
+/* ═══════════════════════════════════════════════════════
+   SECTION SCAFFOLDING
+═══════════════════════════════════════════════════════ */
+.section-wrap {
+  max-width: 1200px; margin: 0 auto;
+  padding: 7rem 2.5rem;
+}
+.s-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem; font-weight: 400;
+  color: var(--teal); letter-spacing: 0.18em; text-transform: uppercase;
+  margin-bottom: 0.8rem;
+  display: flex; align-items: center; gap: 10px;
+}
+.s-eyebrow-line { width: 28px; height: 1px; background: var(--teal); }
+.s-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(2.8rem, 5vw, 5rem);
+  font-weight: 400; line-height: 0.95;
+  letter-spacing: 0.01em;
+  color: var(--bright);
+  margin-bottom: 1.2rem;
+}
+.s-desc {
+  font-size: 0.95rem; color: var(--muted);
+  max-width: 500px; line-height: 1.75;
+}
+
+/* ═══════════════════════════════════════════════════════
+   SCROLL REVEAL
+═══════════════════════════════════════════════════════ */
+.sr { opacity: 0; transform: translateY(32px); transition: opacity 0.8s cubic-bezier(0.16,1,0.3,1), transform 0.8s cubic-bezier(0.16,1,0.3,1); }
+.sr.sr-left { transform: translateX(-32px); }
+.sr.sr-right { transform: translateX(32px); }
+.sr.in { opacity: 1; transform: none; }
+.sr-d1 { transition-delay: 0.1s; }
+.sr-d2 { transition-delay: 0.2s; }
+.sr-d3 { transition-delay: 0.3s; }
+.sr-d4 { transition-delay: 0.4s; }
+.sr-d5 { transition-delay: 0.5s; }
+
+/* ═══════════════════════════════════════════════════════
+   STATS COUNTER SECTION
+═══════════════════════════════════════════════════════ */
+#stats-section {
+  background: var(--ink2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 4rem 2.5rem;
+}
+.stats-grid {
+  max-width: 1100px; margin: 0 auto;
+  display: grid; grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+}
+.stat-cell {
+  padding: 1.5rem 1rem;
+  border-right: 1px solid var(--border);
+  text-align: center;
+  position: relative;
+}
+.stat-cell:last-child { border-right: none; }
+.stat-cell::before {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--teal);
+  transform: scaleX(0); transform-origin: left;
+  transition: transform 0.6s cubic-bezier(0.16,1,0.3,1);
+}
+.stat-cell.in::before { transform: scaleX(1); }
+.stat-num {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 3.5rem; line-height: 1;
+  display: block; margin-bottom: 0.3rem;
+}
+.stat-num.c-teal { color: var(--teal); }
+.stat-num.c-amber { color: var(--amber); }
+.stat-num.c-rose { color: var(--rose); }
+.stat-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.58rem; color: var(--muted);
+  letter-spacing: 0.1em; text-transform: uppercase;
+  line-height: 1.4;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PHENOMENON SECTION
+═══════════════════════════════════════════════════════ */
+#phenom { border-bottom: 1px solid var(--border); }
+.phenom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-top: 4rem;
+}
+.ph-card {
+  background: var(--ink2);
+  padding: 2.5rem;
+  position: relative; overflow: hidden;
+  transition: background 0.4s;
+}
+.ph-card:hover { background: var(--ink3); }
+/* 3D tilt via JS */
+.ph-card .ph-accent {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 5rem; line-height: 1;
+  margin-bottom: 0.5rem;
+}
+.ph-card .ph-accent.ta { color: var(--amber); }
+.ph-card .ph-accent.tr { color: var(--rose); }
+.ph-card .ph-accent.tt { color: var(--teal); }
+.ph-card .ph-accent.ti { color: var(--indigo); }
+.ph-card h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.05rem; font-weight: 600;
+  color: var(--bright); margin-bottom: 0.6rem;
+}
+.ph-card p { font-size: 0.85rem; color: var(--muted); line-height: 1.75; }
+.ph-card .ph-tag {
+  display: inline-block; margin-top: 1.2rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem; padding: 0.3rem 0.8rem;
+  border-radius: 100px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+/* Comparison rows inside ph-card */
+.ph-compare { margin-top: 1.2rem; display: flex; flex-direction: column; gap: 8px; }
+.ph-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0.6rem 0.8rem;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border); border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.68rem;
+}
+.ph-row-model { color: var(--text); flex: 1; }
+.ph-row-val { font-weight: 600; }
+.ph-row-val.neg { color: var(--rose); }
+.ph-row-val.pos { color: var(--teal); }
+
+.ph-card .corner-glow {
+  position: absolute; top: -60px; right: -60px;
+  width: 180px; height: 180px; border-radius: 50%;
+  opacity: 0; transition: opacity 0.4s;
+  pointer-events: none;
+}
+.ph-card:hover .corner-glow { opacity: 1; }
+.corner-glow.amber { background: radial-gradient(circle, rgba(245,158,11,0.12) 0%, transparent 70%); }
+.corner-glow.teal  { background: radial-gradient(circle, rgba(0,232,198,0.12) 0%, transparent 70%); }
+.corner-glow.rose  { background: radial-gradient(circle, rgba(244,63,94,0.12) 0%, transparent 70%); }
+.corner-glow.indigo{ background: radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%); }
+
+/* ═══════════════════════════════════════════════════════
+   HERO SIM (between phenom and simulator)
+═══════════════════════════════════════════════════════ */
+.brain-sim-section {
+  padding: 5rem 2.5rem;
+  max-width: 1100px; margin: 0 auto;
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 3rem; align-items: center;
+}
+.brain-side { display: flex; flex-direction: column; align-items: center; }
+.brain-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem; color: var(--muted);
+  letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 1rem;
+}
+#brain-canvas-wrapper {
+  width: 100%; max-width: 480px;
+  display: grid; grid-template-columns: 1fr auto 1fr;
+  align-items: center; gap: 1.5rem;
+}
+.brain-canvas { border-radius: 12px; overflow: hidden; }
+.brain-canvas canvas { display: block; }
+.sim-vs {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.5rem; color: var(--muted);
+}
+.brain-info { text-align: center; }
+.brain-model-name {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.6rem; margin-bottom: 0.2rem;
+}
+.brain-model-name.amber { color: var(--amber); }
+.brain-model-name.teal  { color: var(--teal); }
+.brain-price { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; color: var(--muted); margin-bottom: 0.8rem; }
+.brain-cost {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.8rem; font-weight: 500; display: block;
+  transition: color 0.4s;
+}
+.brain-cost.safe { color: var(--teal); }
+.brain-cost.danger { color: var(--rose); }
+.brain-cost.neutral { color: var(--muted); }
+.brain-tokens { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--muted); margin-top: 0.2rem; }
+
+#sim-btn {
+  display: block; margin: 2rem auto 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem; font-weight: 500;
+  color: var(--ink); background: var(--amber);
+  border: none; border-radius: 4px;
+  padding: 0.75rem 2.5rem;
+  cursor: none; letter-spacing: 0.06em;
+  transition: all 0.25s;
+}
+#sim-btn:hover { box-shadow: 0 0 30px rgba(245,158,11,0.4); }
+
+/* ═══════════════════════════════════════════════════════
+   SIMULATOR SECTION
+═══════════════════════════════════════════════════════ */
+#simulator { background: var(--ink2); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.sim-grid {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 2.5rem; align-items: start;
+  margin-top: 3.5rem;
+}
+
+/* Slider panel */
+.sim-panel {
+  background: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.8rem;
+  position: sticky; top: 80px;
+}
+.sp-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem; color: var(--muted);
+  letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 1.2rem;
+}
+.slider-display {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 5rem; line-height: 1;
+  color: var(--teal); text-align: right; margin-bottom: -0.5rem;
+}
+input[type=range] {
+  width: 100%; appearance: none;
+  height: 4px; background: var(--border);
+  border-radius: 2px; outline: none; cursor: none;
+  margin: 1rem 0;
+}
+input[type=range]::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 10px var(--teal), 0 0 20px rgba(0,232,198,0.3);
+  cursor: none;
+}
+.c-ticks {
+  display: flex; justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+.c-ticks span { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--muted); }
+
+.task-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 1.8rem; }
+.chip {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.58rem; color: var(--muted);
+  padding: 0.25rem 0.7rem; border-radius: 3px;
+  border: 1px solid var(--border);
+  background: transparent; cursor: none;
+  transition: all 0.2s;
+}
+.chip:hover, .chip.active {
+  border-color: var(--border-teal); color: var(--teal);
+  background: rgba(0,232,198,0.06);
+}
+
+.sim-metric {
+  display: flex; justify-content: space-between;
+  padding: 0.65rem 0; border-top: 1px solid var(--border);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.66rem;
+}
+.sim-metric .sk { color: var(--muted); }
+.sim-metric .sv { font-weight: 500; }
+
+.reversal-box {
+  margin-top: 1.5rem; padding: 0.9rem;
+  border-radius: 6px; font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem; line-height: 1.5;
+  transition: all 0.4s; border: 1px solid;
+}
+.reversal-box.safe { background: rgba(0,232,198,0.05); border-color: rgba(0,232,198,0.2); color: var(--teal); }
+.reversal-box.danger { background: rgba(244,63,94,0.05); border-color: rgba(244,63,94,0.2); color: var(--rose); }
+
+/* Charts */
+.sim-charts { display: flex; flex-direction: column; gap: 1.5rem; }
+.chart-box {
+  background: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.5rem 1.8rem;
+  transition: border-color 0.3s;
+}
+.chart-box:hover { border-color: var(--border-teal); }
+.chart-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+.chart-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.88rem; font-weight: 500; color: var(--bright);
+}
+.chart-sub { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--muted); margin-top: 0.2rem; }
+.legend { display: flex; gap: 1rem; }
+.legend-item { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+.legend-dot { width: 6px; height: 6px; border-radius: 50%; }
+.ld-amber { background: var(--amber); }
+.ld-teal  { background: var(--teal); }
+.ld-rose  { background: var(--rose); }
+
+/* Animated bar chart */
+.bar-chart { height: 120px; display: flex; align-items: flex-end; gap: 8px; }
+.bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+.bar-col-label { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--muted); text-align: center; }
+.bar-track-v { width: 100%; background: rgba(255,255,255,0.03); border-radius: 3px 3px 0 0; display: flex; align-items: flex-end; overflow: hidden; height: 100px; }
+.bar-v {
+  width: 100%; border-radius: 2px 2px 0 0;
+  transition: height 0.7s cubic-bezier(0.34,1.56,0.64,1);
+}
+.bar-v.ba { background: linear-gradient(180deg, var(--amber) 0%, rgba(245,158,11,0.35) 100%); box-shadow: 0 -6px 14px rgba(245,158,11,0.3); }
+.bar-v.bt { background: linear-gradient(180deg, var(--teal)  0%, rgba(0,232,198,0.35) 100%); box-shadow: 0 -6px 14px rgba(0,232,198,0.3); }
+.bar-v.br { background: linear-gradient(180deg, var(--rose)  0%, rgba(244,63,94,0.35) 100%);  box-shadow: 0 -6px 14px rgba(244,63,94,0.3); }
+
+.cost-compare {
+  display: flex; justify-content: space-between;
+  margin-top: 1.2rem;
+  padding: 0.9rem 1rem;
+  background: rgba(255,255,255,0.02);
+  border-radius: 6px; border: 1px solid var(--border);
+}
+.cc-item { text-align: center; }
+.cc-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.1rem; font-weight: 600; display: block;
+}
+.cc-val.ca { color: var(--amber); }
+.cc-val.ct { color: var(--teal); }
+.cc-val.diff-neg { color: var(--rose); }
+.cc-val.diff-pos { color: var(--teal); }
+.cc-sub { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--muted); margin-top: 2px; }
+
+.win-badge {
+  margin-top: 0.8rem; padding: 0.5rem 1rem;
+  border-radius: 3px; text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem; font-weight: 500;
+  transition: all 0.4s;
+}
+.win-badge.small { background: rgba(0,232,198,0.07); color: var(--teal); border: 1px solid rgba(0,232,198,0.2); }
+.win-badge.large { background: rgba(244,63,94,0.07); color: var(--rose); border: 1px solid rgba(244,63,94,0.2); }
+
+/* ═══════════════════════════════════════════════════════
+   ROUTER SECTION
+═══════════════════════════════════════════════════════ */
+#router { border-top: 1px solid var(--border); }
+.router-grid {
+  display: grid; grid-template-columns: 1.1fr 1fr;
+  gap: 2.5rem; margin-top: 3.5rem; align-items: start;
+}
+
+/* Terminal */
+.terminal {
+  background: #050810;
+  border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+  position: relative;
+}
+.terminal::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0,0,0,0.15),
+    rgba(0,0,0,0.15) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none; z-index: 1; opacity: 0.4;
+}
+.term-bar {
+  display: flex; align-items: center; gap: 7px;
+  padding: 0.85rem 1.2rem;
+  background: rgba(255,255,255,0.025);
+  border-bottom: 1px solid var(--border);
+  position: relative; z-index: 2;
+}
+.tdot { width: 11px; height: 11px; border-radius: 50%; }
+.td-r { background: #ff5f57; } .td-y { background: #febc2e; } .td-g { background: #28c840; }
+.term-name {
+  flex: 1; text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem; color: var(--muted); letter-spacing: 0.05em;
+}
+.term-copy {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.58rem; color: var(--muted);
+  background: transparent; border: 1px solid var(--border);
+  border-radius: 3px; padding: 0.2rem 0.6rem;
+  cursor: none; transition: all 0.2s;
+}
+.term-copy:hover { border-color: var(--border-teal); color: var(--teal); }
+.code-body {
+  padding: 1.8rem 2rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem; line-height: 1.95;
+  position: relative; z-index: 2;
+  overflow-x: auto;
+}
+.k { color: #c792ea; } /* keyword */
+.t { color: #82aaff; } /* type */
+.s { color: #c3e88d; } /* string */
+.n { color: #f78c6c; } /* number */
+.c { color: #2d3a52; font-style: italic; } /* comment */
+.f { color: var(--teal); } /* function/accent */
+.o { color: var(--amber); } /* orange */
+.v { color: var(--text); } /* variable */
+
+/* Typing animation for code */
+.code-line { opacity: 0; animation: code-in 0.1s ease forwards; }
+@keyframes code-in { to { opacity: 1; } }
+
+/* Live router panel */
+.router-panel {
+  display: flex; flex-direction: column; gap: 1.5rem;
+}
+.live-box {
+  background: var(--ink2);
+  border: 1px solid var(--border);
+  border-radius: 10px; padding: 1.8rem;
+}
+.live-box h3 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1rem; font-weight: 600; color: var(--bright);
+  margin-bottom: 0.3rem;
+}
+.live-box p { font-size: 0.82rem; color: var(--muted); margin-bottom: 1.2rem; }
+.prompt-area {
+  width: 100%; background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 0.9rem; font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem; color: var(--text); resize: vertical; min-height: 90px;
+  outline: none; line-height: 1.65; transition: border-color 0.2s;
+}
+.prompt-area:focus { border-color: var(--border-teal); }
+.route-submit {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 0.8rem; margin-left: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem; font-weight: 500;
+  color: var(--ink); background: var(--teal);
+  border: none; border-radius: 4px;
+  padding: 0.65rem 1.4rem; cursor: none;
+  transition: all 0.25s;
+}
+.route-submit:hover { box-shadow: 0 0 20px rgba(0,232,198,0.4); }
+.route-output {
+  opacity: 0; transform: translateY(10px);
+  transition: all 0.45s cubic-bezier(0.16,1,0.3,1);
+  margin-top: 1rem;
+}
+.route-output.show { opacity: 1; transform: translateY(0); }
+.ro-header {
+  padding: 0.55rem 0.9rem; font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem; letter-spacing: 0.08em;
+  border-radius: 4px 4px 0 0;
+}
+.ro-header.large { background: rgba(0,232,198,0.08); color: var(--teal); }
+.ro-header.small { background: rgba(245,158,11,0.08); color: var(--amber); }
+.ro-body {
+  background: rgba(255,255,255,0.015);
+  border: 1px solid var(--border); border-top: none;
+  border-radius: 0 0 4px 4px; padding: 0.8rem;
+}
+.ro-row {
+  display: flex; justify-content: space-between;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
+  padding: 0.3rem 0; border-bottom: 1px solid var(--border);
+}
+.ro-row:last-child { border-bottom: none; }
+.ro-k { color: var(--muted); }
+.ro-v { color: var(--text); }
+.ro-v.hl { color: var(--teal); font-weight: 600; }
+.score-track { height: 3px; background: var(--border); border-radius: 2px; margin-top: 0.8rem; overflow: hidden; }
+.score-fill { height: 100%; border-radius: 2px; transition: width 0.7s cubic-bezier(0.34,1.56,0.64,1); }
+
+/* Architecture flow */
+.arch-box {
+  background: var(--ink2);
+  border: 1px solid var(--border);
+  border-radius: 10px; padding: 1.8rem;
+}
+.arch-label { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; text-align: center; margin-bottom: 1.5rem; }
+.arch-flow {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; flex-wrap: nowrap;
+}
+.af-node {
+  background: var(--ink); border: 1px solid var(--border);
+  border-radius: 6px; padding: 0.6rem 0.8rem;
+  text-align: center; flex-shrink: 0;
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.af-node:hover { border-color: var(--border-teal); box-shadow: var(--glow-teal); }
+.af-icon { font-size: 1rem; display: block; margin-bottom: 0.2rem; }
+.af-label { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--muted); line-height: 1.3; }
+.af-arrow { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--muted); padding: 0 4px; flex-shrink: 0; }
+.af-split { display: flex; flex-direction: column; gap: 5px; }
+.af-split-node { background: var(--ink); border-radius: 5px; padding: 0.45rem 0.7rem; text-align: center; border: 1px solid var(--border); }
+.af-split-node.teal-n { border-color: rgba(0,232,198,0.2); }
+.af-split-node.amber-n { border-color: rgba(245,158,11,0.2); }
+.af-split-label { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; line-height: 1.3; }
+.af-split-label.teal-l { color: var(--teal); }
+.af-split-label.amber-l { color: var(--amber); }
+
+/* ═══════════════════════════════════════════════════════
+   ROI SECTION
+═══════════════════════════════════════════════════════ */
+#roi { background: var(--ink2); border-top: 1px solid var(--border); }
+.roi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; margin-top: 3.5rem; }
+.roi-form-box {
+  background: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 10px; padding: 2rem;
+}
+.fg { margin-bottom: 1.4rem; }
+.fl {
+  display: block; font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem; color: var(--muted);
+  letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.5rem;
+}
+.fi {
+  width: 100%; background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border); border-radius: 5px;
+  padding: 0.65rem 0.9rem; font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem; color: var(--text);
+  outline: none; transition: border-color 0.2s;
+}
+.fi:focus { border-color: var(--border-teal); }
+.fs {
+  width: 100%; background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border); border-radius: 5px;
+  padding: 0.65rem 0.9rem; font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem; color: var(--text);
+  outline: none; cursor: none; appearance: none;
+}
+.fs option { background: var(--ink3); }
+.calc-submit {
+  width: 100%; font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem; font-weight: 500;
+  color: var(--ink); background: var(--teal);
+  border: none; border-radius: 5px;
+  padding: 0.85rem; cursor: none;
+  letter-spacing: 0.06em; transition: all 0.25s;
+}
+.calc-submit:hover { box-shadow: 0 0 30px rgba(0,232,198,0.4); }
+
+.roi-results-box {
+  background: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 10px; padding: 2rem;
+  transition: border-color 0.5s, box-shadow 0.5s;
+}
+.roi-results-box.lit { border-color: var(--border-teal); box-shadow: var(--glow-teal); }
+.roi-results-box h3 { font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--bright); margin-bottom: 1.5rem; }
+.rm {
+  padding: 1rem 0; border-bottom: 1px solid var(--border);
+}
+.rm:last-child { border-bottom: none; }
+.rm-label { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 0.3rem; }
+.rm-val {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.4rem; line-height: 1;
+}
+.rm-val.danger { color: var(--rose); }
+.rm-val.success { color: var(--teal); }
+.rm-sub { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--muted); margin-top: 0.2rem; }
+
+/* ═══════════════════════════════════════════════════════
+   CTA SECTION
+═══════════════════════════════════════════════════════ */
+#cta {
+  padding: 10rem 2.5rem;
+  text-align: center; position: relative; overflow: hidden;
+}
+#cta-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cta-inner { position: relative; z-index: 1; }
+.cta-pre {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6rem; color: var(--teal);
+  letter-spacing: 0.2em; text-transform: uppercase;
+  margin-bottom: 1rem;
+  opacity: 0; transform: translateY(16px);
+  transition: all 0.6s;
+}
+.cta-pre.in { opacity: 1; transform: none; }
+.cta-h {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(4rem, 9vw, 8rem);
+  line-height: 0.92; letter-spacing: 0.01em;
+  margin-bottom: 1.5rem;
+  opacity: 0; transform: translateY(24px);
+  transition: all 0.7s 0.1s;
+}
+.cta-h.in { opacity: 1; transform: none; }
+.cta-sub {
+  font-size: 0.95rem; color: var(--muted);
+  max-width: 420px; margin: 0 auto 3rem; line-height: 1.7;
+  opacity: 0; transform: translateY(20px);
+  transition: all 0.7s 0.2s;
+}
+.cta-sub.in { opacity: 1; transform: none; }
+.cta-btns {
+  display: flex; gap: 1rem; justify-content: center;
+  opacity: 0; transform: translateY(20px);
+  transition: all 0.7s 0.3s;
+}
+.cta-btns.in { opacity: 1; transform: none; }
+
+/* ═══════════════════════════════════════════════════════
+   FOOTER
+═══════════════════════════════════════════════════════ */
+footer {
+  padding: 2rem 2.5rem;
+  border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 1rem;
+}
+.f-logo { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--muted); }
+.f-links { display: flex; gap: 1.5rem; }
+.f-links a { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; transition: color 0.2s; }
+.f-links a:hover { color: var(--teal); }
+
+/* ═══════════════════════════════════════════════════════
+   MOBILE
+═══════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .hero-float { display: none; }
+  .stats-grid { grid-template-columns: repeat(3, 1fr); }
+  .phenom-grid, .router-grid, .roi-grid, .sim-grid { grid-template-columns: 1fr; }
+  .sim-panel { position: static; }
+  nav { padding: 1rem 1.5rem; }
+  .nav-links { display: none; }
+  .brain-sim-section { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .stat-cell:nth-child(5) { grid-column: span 2; }
+}
+</style>
+</head>
+<body>
+
+<!-- CURSOR -->
+<div id="cursor-dot"></div>
+<div id="cursor-ring"></div>
+<canvas id="trail-canvas"></canvas>
+<div id="grain"></div>
+
+<!-- TICKER -->
+<div id="ticker">
+  <div class="ticker-inner" id="ticker-inner"></div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">
+    <div class="nav-logo-indicator">
+      <div class="live-dot"></div>
+      <span class="live-text">LIVE</span>
+    </div>
+    TrueCost<span style="color:var(--muted)">/</span>Router
+  </div>
+  <div class="nav-links">
+    <a href="#phenom">Research</a>
+    <a href="#simulator">Simulator</a>
+    <a href="#router">Algorithm</a>
+    <a href="#roi">ROI</a>
+  </div>
+  <button class="nav-pill" onclick="document.getElementById('roi').scrollIntoView({behavior:'smooth'})">Calculate Waste</button>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <canvas id="aurora-canvas"></canvas>
+
+  <div style="position:relative;z-index:2;max-width:1200px;margin:0 auto;width:100%">
+    <div class="hero-eyebrow">
+      <div class="eyebrow-line"></div>
+      arXiv:2603.23971 · March 2026 · Peer Reviewed
+    </div>
+
+    <h1 class="hero-h1">
+      <span class="line1">Your "Cheap"</span>
+      <span class="line2">
+        <span class="glitch-wrap" data-text="Model Costs">Model Costs</span>
+      </span>
+      <span class="line3"><em>More.</em></span>
+    </h1>
+
+    <p class="hero-sub">
+      A new paper benchmarks 8 frontier reasoning LLMs and finds that in <strong>21.8% of comparisons</strong>, the model with the lower listed price actually incurs a higher total cost — with reversals reaching <strong>28×</strong>. The culprit: thinking token bloat nobody tells you about.
+    </p>
+
+    <div class="hero-actions">
+      <button class="mag-btn mag-btn-primary" onclick="document.getElementById('simulator').scrollIntoView({behavior:'smooth'})">Run the Simulator →</button>
+      <a href="https://arxiv.org/abs/2603.23971" target="_blank" class="mag-btn mag-btn-ghost">📄 Read the Paper</a>
+    </div>
+  </div>
+
+  <!-- Float cards -->
+  <div class="hero-float">
+    <div class="float-card">
+      <span class="fc-num" id="fc1">0</span>
+      <div class="fc-label">% Ranking<br>Reversals Found</div>
+    </div>
+    <div class="float-card">
+      <span class="fc-num amber" id="fc2">0×</span>
+      <div class="fc-label">Max Reversal<br>Magnitude</div>
+    </div>
+    <div class="float-card">
+      <span class="fc-num rose" id="fc3">0%</span>
+      <div class="fc-label">More Thinking<br>Tokens (peak)</div>
+    </div>
+  </div>
+</section>
+
+<!-- MARQUEE -->
+<div class="marquee-strip">
+  <div class="marquee-inner" id="marquee-inner"></div>
+</div>
+
+<!-- STATS -->
+<div id="stats-section">
+  <div class="stats-grid">
+    <div class="stat-cell sr">
+      <span class="stat-num c-teal" data-target="21.8" data-suffix="%">0%</span>
+      <div class="stat-label">Ranking Reversals<br>Observed</div>
+    </div>
+    <div class="stat-cell sr sr-d1">
+      <span class="stat-num c-amber" data-target="28" data-suffix="×">0×</span>
+      <div class="stat-label">Max Reversal<br>Magnitude</div>
+    </div>
+    <div class="stat-cell sr sr-d2">
+      <span class="stat-num c-rose" data-target="900" data-suffix="%">0%</span>
+      <div class="stat-label">More Thinking<br>Tokens (Peak)</div>
+    </div>
+    <div class="stat-cell sr sr-d3">
+      <span class="stat-num c-teal" data-target="8" data-suffix="">0</span>
+      <div class="stat-label">Frontier RLMs<br>Benchmarked</div>
+    </div>
+    <div class="stat-cell sr sr-d4">
+      <span class="stat-num c-amber" data-target="70" data-suffix="%">0%</span>
+      <div class="stat-label">Reversals from<br>Thinking Tokens</div>
+    </div>
+  </div>
+</div>
+
+<!-- PHENOMENON -->
+<section id="phenom">
+  <div class="section-wrap">
+    <div class="s-eyebrow sr"><div class="s-eyebrow-line"></div> The Research Finding</div>
+    <h2 class="s-title sr">Why Listed Price<br>Is a Lie</h2>
+    <p class="s-desc sr sr-d1">The first systematic study of actual vs. listed inference costs across 9 task categories. The findings break fundamental assumptions about how developers choose AI infrastructure.</p>
+
+    <div class="phenom-grid">
+      <div class="ph-card sr tilt-card">
+        <div class="corner-glow amber"></div>
+        <div class="ph-accent ta">9×</div>
+        <h3>Thinking Token Explosion</h3>
+        <p>Smaller reasoning models burn disproportionate "thinking budget" on complex queries — generating internal chain-of-thought tokens that are billed but invisible to you. On the same prompt, one model can generate 900% more thinking tokens than another.</p>
+        <span class="ph-tag">Root Cause Identified</span>
+      </div>
+
+      <div class="ph-card sr sr-d1 tilt-card">
+        <div class="corner-glow rose"></div>
+        <div class="ph-accent tr">28×</div>
+        <h3>The Reversal in Practice</h3>
+        <p>Gemini 3 Flash lists 78% cheaper than GPT-5.2 — yet actually costs 22% more across benchmarks. This isn't an edge case. It's a structural flaw in how token economics work at high reasoning complexity.</p>
+        <div class="ph-compare">
+          <div class="ph-row">
+            <span class="ph-row-model">Gemini 3 Flash</span>
+            <span class="ph-row-val neg">+22% actual cost</span>
+          </div>
+          <div class="ph-row">
+            <span class="ph-row-model">GPT-5.2</span>
+            <span class="ph-row-val pos">Actual winner ✓</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ph-card sr sr-d2 tilt-card">
+        <div class="corner-glow teal"></div>
+        <div class="ph-accent tt">70%</div>
+        <h3>Thinking Tokens Are the Culprit</h3>
+        <p>Removing thinking token costs reduces ranking reversals by 70% and dramatically raises rank correlation between price and actual cost. The listed price alone is not a useful signal.</p>
+        <span class="ph-tag">τ correlation improves 0.41 → 0.79</span>
+      </div>
+
+      <div class="ph-card sr sr-d3 tilt-card">
+        <div class="corner-glow indigo"></div>
+        <div class="ph-accent ti">∞</div>
+        <h3>The Fix: Route by TrueCost</h3>
+        <p>The solution isn't "always use the big model." Low-complexity queries are genuinely cheap on small models. Complexity-aware routing gives you the best of both — cheap where it's cheap, efficient where it matters.</p>
+        <span class="ph-tag">TrueCost Dynamic Router</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BRAIN SIM -->
+<div style="border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--ink2);">
+  <div class="brain-sim-section">
+    <div class="sr">
+      <div class="s-eyebrow" style="margin-bottom:1rem"><div class="s-eyebrow-line"></div> Live Simulation</div>
+      <h2 class="s-title" style="font-size:clamp(2rem,4vw,3.5rem)">Watch the<br>Cost Invert</h2>
+      <p class="s-desc" style="margin-bottom:1.5rem">Click simulate to send a complex reasoning query to both models simultaneously. Watch the "cheaper" one rack up a bill.</p>
+      <button id="sim-btn">⚡ Simulate Complex Query</button>
+    </div>
+
+    <div class="sr sr-d2">
+      <div id="brain-canvas-wrapper">
+        <div style="text-align:center">
+          <div class="brain-label">Gemini 3 Flash</div>
+          <canvas id="bc-small" width="130" height="130" style="border:1px solid var(--border);border-radius:10px;"></canvas>
+          <div class="brain-model-name amber" style="margin-top:0.8rem">FLASH</div>
+          <div class="brain-price">$0.22 / 1M tokens · listed 78% cheaper</div>
+          <div class="brain-cost neutral" id="bc-cost-s">$0.0000</div>
+          <div class="brain-tokens" id="bc-tok-s">0 thinking tokens</div>
+        </div>
+        <div class="sim-vs">VS</div>
+        <div style="text-align:center">
+          <div class="brain-label">GPT-5.2</div>
+          <canvas id="bc-large" width="130" height="130" style="border:1px solid var(--border);border-radius:10px;"></canvas>
+          <div class="brain-model-name teal" style="margin-top:0.8rem">GPT-5.2</div>
+          <div class="brain-price">$1.00 / 1M tokens · listed more expensive</div>
+          <div class="brain-cost neutral" id="bc-cost-l">$0.0000</div>
+          <div class="brain-tokens" id="bc-tok-l">0 thinking tokens</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SIMULATOR -->
+<section id="simulator">
+  <div class="section-wrap">
+    <div class="s-eyebrow sr"><div class="s-eyebrow-line"></div> Token Bloat Simulator</div>
+    <h2 class="s-title sr">Find Your<br>Crossover Point</h2>
+    <p class="s-desc sr sr-d1">Drag the slider and watch the price reversal happen in real time. This is your actual cost — not the listed one.</p>
+
+    <div class="sim-grid">
+      <div class="sim-panel sr">
+        <div class="sp-label">Prompt Complexity</div>
+        <div class="slider-display" id="slider-display">3.0</div>
+        <input type="range" id="c-slider" min="1" max="10" value="3" step="0.1"/>
+        <div class="c-ticks"><span>1 Trivial</span><span>5 Moderate</span><span>10 Expert</span></div>
+
+        <div class="sp-label">Quick Tasks</div>
+        <div class="task-chips">
+          <span class="chip" data-c="1.5">Translate</span>
+          <span class="chip" data-c="2">Summarize</span>
+          <span class="chip" data-c="3.5">Write email</span>
+          <span class="chip" data-c="5">Debug code</span>
+          <span class="chip" data-c="6.5">Prove theorem</span>
+          <span class="chip" data-c="8">Multi-step math</span>
+          <span class="chip" data-c="9.5">PhD-level QA</span>
+        </div>
+
+        <div class="sim-metric">
+          <span class="sk">Flash (actual/1K q)</span>
+          <span class="sv" id="sm-flash" style="color:var(--amber)">—</span>
+        </div>
+        <div class="sim-metric">
+          <span class="sk">GPT-5.2 (actual/1K q)</span>
+          <span class="sv" id="sm-gpt" style="color:var(--teal)">—</span>
+        </div>
+        <div class="sim-metric">
+          <span class="sk">Cost delta</span>
+          <span class="sv" id="sm-delta">—</span>
+        </div>
+        <div class="sim-metric">
+          <span class="sk">Thinking bloat ×</span>
+          <span class="sv" id="sm-bloat">—</span>
+        </div>
+
+        <div class="reversal-box safe" id="reversal-box">
+          ✓ Below crossover. Flash is genuinely cheaper here.
+        </div>
+      </div>
+
+      <div class="sim-charts sr sr-d1">
+        <div class="chart-box">
+          <div class="chart-header">
+            <div>
+              <div class="chart-name">Thinking Tokens Generated</div>
+              <div class="chart-sub">per complexity level, both models</div>
+            </div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot ld-amber"></div>Flash</div>
+              <div class="legend-item"><div class="legend-dot ld-teal"></div>GPT-5.2</div>
+            </div>
+          </div>
+          <div class="bar-chart" id="tok-chart"></div>
+        </div>
+
+        <div class="chart-box">
+          <div class="chart-header">
+            <div>
+              <div class="chart-name">Total Cost — 1,000 Queries</div>
+              <div class="chart-sub">including all thinking tokens</div>
+            </div>
+            <div class="legend">
+              <div class="legend-item"><div class="legend-dot ld-amber"></div>Flash</div>
+              <div class="legend-item"><div class="legend-dot ld-teal"></div>GPT-5.2</div>
+              <div class="legend-item"><div class="legend-dot ld-rose"></div>Overpay</div>
+            </div>
+          </div>
+          <div class="bar-chart" id="cost-chart"></div>
+          <div class="cost-compare">
+            <div class="cc-item">
+              <span class="cc-val ca" id="cc-flash">—</span>
+              <span class="cc-sub">Flash / 1K</span>
+            </div>
+            <div class="cc-item">
+              <span class="cc-val" id="cc-diff">—</span>
+              <span class="cc-sub">difference</span>
+            </div>
+            <div class="cc-item">
+              <span class="cc-val ct" id="cc-gpt">—</span>
+              <span class="cc-sub">GPT-5.2 / 1K</span>
+            </div>
+          </div>
+          <div class="win-badge small" id="win-badge">— Drag slider to compare —</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ROUTER -->
+<section id="router">
+  <div class="section-wrap">
+    <div class="s-eyebrow sr"><div class="s-eyebrow-line"></div> The Solution</div>
+    <h2 class="s-title sr">TrueCost<br>Dynamic Router</h2>
+    <p class="s-desc sr sr-d1">An algorithmic gateway that intercepts every prompt, estimates complexity, and routes to the statistically cheapest model — after projecting thinking-token bloat. One function. Infinite savings.</p>
+
+    <div class="router-grid">
+      <div class="terminal sr animated-border-term">
+        <div class="term-bar">
+          <div class="tdot td-r"></div><div class="tdot td-y"></div><div class="tdot td-g"></div>
+          <div class="term-name">truecost-router.ts</div>
+          <button class="term-copy" id="copy-btn">Copy</button>
+        </div>
+        <div class="code-body" id="code-body">
+<span class="c">/**
+ * TrueCost Dynamic Router
+ * Complexity-aware LLM gateway.
+ * Paper: arxiv.org/abs/2603.23971
+ */</span>
+
+<span class="k">interface</span> <span class="t">ModelConfig</span> {
+  id:                   <span class="t">string</span>;
+  pricePerMTok:         <span class="n">number</span>;
+  bloatExponent:        <span class="n">number</span>;  <span class="c">// exponential</span>
+  bloatLinear:          <span class="n">number</span>;  <span class="c">// linear</span>
+}
+
+<span class="k">interface</span> <span class="t">RouteDecision</span> {
+  model:          <span class="t">string</span>;
+  complexityScore:<span class="n">number</span>;
+  projectedCost:  <span class="n">number</span>;
+  bloatMultiplier:<span class="n">number</span>;
+  reasoning:      <span class="t">string</span>;
+}
+
+<span class="c">// ─── Complexity Estimator ────────────────</span>
+<span class="k">function</span> <span class="f">scoreComplexity</span>(
+  prompt: <span class="t">string</span>
+): <span class="n">number</span> {
+  <span class="k">let</span> score = <span class="n">0</span>;
+
+  <span class="c">// Length signal (0–3)</span>
+  score += Math.min(prompt.length / <span class="n">500</span>, <span class="n">3</span>);
+
+  <span class="c">// Reasoning keywords → +1.5 each</span>
+  [<span class="s">/\bprove\b/i</span>, <span class="s">/\bsynthesize\b/i</span>,
+   <span class="s">/\bcalculate\b/i</span>, <span class="s">/\bderive\b/i</span>,
+   <span class="s">/\boptimize\b/i</span>, <span class="s">/\balgorithm\b/i</span>,
+   <span class="s">/\bstep.by.step\b/i</span>]
+  .forEach(p => { <span class="k">if</span> (p.test(prompt)) score += <span class="n">1.5</span>; });
+
+  <span class="c">// Multi-part queries</span>
+  score += (prompt.match(<span class="s">/\?/g</span>) || []).length * <span class="n">0.8</span>;
+
+  <span class="c">// Domain boost: math/science</span>
+  <span class="k">if</span> (<span class="s">/\b(math|proof|theorem|integral)\b/i</span>
+      .test(prompt)) score += <span class="n">2.0</span>;
+
+  <span class="k">return</span> Math.min(score, <span class="n">10</span>);
+}
+
+<span class="c">// ─── Cost Projector ──────────────────────</span>
+<span class="k">function</span> <span class="f">projectCost</span>(
+  m: <span class="t">ModelConfig</span>, c: <span class="n">number</span>, tokens: <span class="n">number</span>
+): <span class="n">number</span> {
+  <span class="k">const</span> bloat = m.bloatExponent > <span class="n">0</span>
+    ? <span class="n">1</span> + (c ** m.bloatExponent)
+    : <span class="n">1</span> + (c * m.bloatLinear);
+  <span class="k">return</span> (tokens * bloat / <span class="n">1_000_000</span>) * m.pricePerMTok;
+}
+
+<span class="c">// ─── Router ──────────────────────────────</span>
+<span class="k">const</span> MODELS: <span class="t">ModelConfig</span>[] = [
+  { id: <span class="s">"gemini-3-flash"</span>, pricePerMTok: <span class="n">0.22</span>,
+    bloatExponent: <span class="n">2.5</span>, bloatLinear: <span class="n">0</span> },
+  { id: <span class="s">"gpt-5.2"</span>,        pricePerMTok: <span class="n">1.00</span>,
+    bloatExponent: <span class="n">0</span>,   bloatLinear: <span class="n">0.2</span> },
+];
+
+<span class="k">export function</span> <span class="f">routePrompt</span>(
+  prompt: <span class="t">string</span>
+): <span class="t">RouteDecision</span> {
+  <span class="k">const</span> c = <span class="f">scoreComplexity</span>(prompt);
+  <span class="k">const</span> costs = MODELS
+    .map(m => ({ m, cost: <span class="f">projectCost</span>(m, c, <span class="n">2000</span>) }))
+    .sort((a, b) => a.cost - b.cost);
+
+  <span class="k">return</span> {
+    model:          costs[<span class="n">0</span>].m.id,
+    complexityScore: c,
+    projectedCost:  costs[<span class="n">0</span>].cost,
+    bloatMultiplier: costs[<span class="n">0</span>].cost / (costs[<span class="n">0</span>].m.pricePerMTok * <span class="n">0.002</span>),
+    reasoning: <span class="o">`c=${c.toFixed(2)} → ${costs[0].m.id}`</span>,
+  };
+}
+        </div>
+      </div>
+
+      <div class="router-panel">
+        <div class="live-box sr sr-d1">
+          <h3>🧪 Live Routing Demo</h3>
+          <p>Paste any prompt. The router scores complexity and picks the cheapest model, accounting for bloat.</p>
+          <textarea class="prompt-area" id="live-prompt">Summarize the key points from this article about climate change.</textarea>
+          <button class="route-submit" id="route-btn">▶ Route This Prompt</button>
+          <div class="route-output" id="route-out">
+            <div class="ro-header" id="ro-hdr">→ ROUTING DECISION</div>
+            <div class="ro-body">
+              <div class="ro-row"><span class="ro-k">complexity_score</span><span class="ro-v hl" id="ro-c">—</span></div>
+              <div class="ro-row"><span class="ro-k">routed_to</span><span class="ro-v hl" id="ro-m">—</span></div>
+              <div class="ro-row"><span class="ro-k">projected_cost</span><span class="ro-v" id="ro-p">—</span></div>
+              <div class="ro-row"><span class="ro-k">thinking_bloat</span><span class="ro-v" id="ro-b">—</span></div>
+              <div class="ro-row"><span class="ro-k">savings_vs_naive</span><span class="ro-v" id="ro-s" style="color:var(--teal)">—</span></div>
+            </div>
+            <div class="score-track"><div class="score-fill" id="ro-bar" style="width:0;background:var(--teal)"></div></div>
+          </div>
+        </div>
+
+        <div class="arch-box sr sr-d2">
+          <div class="arch-label">// Request Flow</div>
+          <div class="arch-flow">
+            <div class="af-node">
+              <span class="af-icon">📨</span>
+              <span class="af-label">Prompt<br>Ingress</span>
+            </div>
+            <div class="af-arrow">──▶</div>
+            <div class="af-node" style="border-color:var(--border-teal)">
+              <span class="af-icon">🧮</span>
+              <span class="af-label">Complexity<br>Score</span>
+            </div>
+            <div class="af-arrow">──▶</div>
+            <div class="af-node" style="border-color:var(--border-teal)">
+              <span class="af-icon">⚖️</span>
+              <span class="af-label">Cost<br>Project</span>
+            </div>
+            <div class="af-arrow">──▶</div>
+            <div class="af-split">
+              <div class="af-split-node teal-n"><span class="af-split-label teal-l">High → GPT-5.2</span></div>
+              <div class="af-split-node amber-n"><span class="af-split-label amber-l">Low → Flash</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ROI -->
+<section id="roi">
+  <div class="section-wrap">
+    <div class="s-eyebrow sr"><div class="s-eyebrow-line"></div> ROI Calculator</div>
+    <h2 class="s-title sr">How Much Are<br>You Burning?</h2>
+    <p class="s-desc sr sr-d1">See your real monthly overspend from blindly using "cheap" models on complex workloads — before routing.</p>
+
+    <div class="roi-grid">
+      <div class="roi-form-box sr">
+        <div class="fg">
+          <label class="fl">Daily API Queries</label>
+          <input class="fi" type="number" id="dq" value="10000"/>
+        </div>
+        <div class="fg">
+          <label class="fl">Avg. Prompt Complexity (1–10)</label>
+          <input class="fi" type="number" id="ac" value="6" min="1" max="10" step="0.5"/>
+        </div>
+        <div class="fg">
+          <label class="fl">% of Queries That Are Complex (≥5)</label>
+          <input class="fi" type="number" id="cp" value="40" min="0" max="100"/>
+        </div>
+        <div class="fg">
+          <label class="fl">Current Strategy</label>
+          <select class="fs" id="strat">
+            <option value="always-small">Always use smallest / cheapest model</option>
+            <option value="always-large">Always use largest model</option>
+            <option value="random">Random / ad-hoc selection</option>
+          </select>
+        </div>
+        <button class="calc-submit" id="calc-btn">→ Calculate My Waste</button>
+      </div>
+
+      <div class="roi-results-box sr sr-d1" id="roi-res">
+        <h3>Monthly Cost Breakdown</h3>
+        <div class="rm">
+          <div class="rm-label">Current Monthly Cost</div>
+          <div class="rm-val danger" id="r-curr">—</div>
+          <div class="rm-sub">without intelligent routing</div>
+        </div>
+        <div class="rm">
+          <div class="rm-label">Optimised Monthly Cost</div>
+          <div class="rm-val success" id="r-opt">—</div>
+          <div class="rm-sub">with TrueCost Router</div>
+        </div>
+        <div class="rm">
+          <div class="rm-label">💸 Monthly Wasted Budget</div>
+          <div class="rm-val danger" id="r-waste">Run calculation first →</div>
+          <div class="rm-sub" id="r-waste-sub">—</div>
+        </div>
+        <div class="rm">
+          <div class="rm-label">Annual Savings</div>
+          <div class="rm-val success" id="r-annual">—</div>
+          <div class="rm-sub">by routing correctly</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section id="cta">
+  <canvas id="cta-canvas"></canvas>
+  <div class="cta-inner">
+    <div class="cta-pre">Get Started</div>
+    <h2 class="cta-h">Stop Paying<br>The <span style="color:var(--teal)">Hidden Tax.</span></h2>
+    <p class="cta-sub">The TrueCost Router pays for itself on the first 1,000 complex queries. Complexity-aware. Model-agnostic. Open source.</p>
+    <div class="cta-btns">
+      <a href="https://arxiv.org/abs/2603.23971" target="_blank" class="mag-btn mag-btn-primary">📄 Read the Paper</a>
+      <button class="mag-btn mag-btn-ghost" onclick="document.getElementById('simulator').scrollIntoView({behavior:'smooth'})">↳ Run Simulator</button>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="f-logo">TrueCost/Router · Based on arXiv:2603.23971</div>
+  <div class="f-links">
+    <a href="https://arxiv.org/abs/2603.23971" target="_blank">Paper</a>
+    <a href="#simulator">Simulator</a>
+    <a href="#router">Algorithm</a>
+    <a href="#roi">ROI</a>
+  </div>
+</footer>
+
+<script>
+/* ════════════════════════════════════════════════════════
+   CURSOR
+════════════════════════════════════════════════════════ */
+const cursorDot  = document.getElementById('cursor-dot');
+const cursorRing = document.getElementById('cursor-ring');
+const trailCanvas = document.getElementById('trail-canvas');
+const tCtx = trailCanvas.getContext('2d');
+let mx = -200, my = -200, rx = -200, ry = -200;
+const trail = [];
+
+trailCanvas.width  = window.innerWidth;
+trailCanvas.height = window.innerHeight;
+window.addEventListener('resize', () => {
+  trailCanvas.width  = window.innerWidth;
+  trailCanvas.height = window.innerHeight;
+});
+
+document.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+  trail.push({ x: mx, y: my, life: 1.0, r: 3 });
+  if (trail.length > 40) trail.shift();
+});
+document.addEventListener('mousedown', () => document.body.classList.add('cursor-click'));
+document.addEventListener('mouseup', () => document.body.classList.remove('cursor-click'));
+
+document.querySelectorAll('a, button, input, textarea, select, .chip, .task-pill, .ph-card, .float-card')
+  .forEach(el => {
+    el.addEventListener('mouseenter', () => document.body.classList.add('cursor-hover'));
+    el.addEventListener('mouseleave', () => document.body.classList.remove('cursor-hover'));
+  });
+
+function animCursor() {
+  rx += (mx - rx) * 0.12;
+  ry += (my - ry) * 0.12;
+  cursorDot.style.transform  = `translate(${mx}px, ${my}px) translate(-50%, -50%)`;
+  cursorRing.style.transform = `translate(${rx}px, ${ry}px) translate(-50%, -50%)`;
+
+  tCtx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+  trail.forEach((p, i) => {
+    p.life -= 0.04;
+    if (p.life <= 0) return;
+    const alpha = p.life * 0.35;
+    tCtx.beginPath();
+    tCtx.arc(p.x, p.y, p.r * p.life, 0, Math.PI * 2);
+    tCtx.fillStyle = `rgba(0,232,198,${alpha})`;
+    tCtx.fill();
+  });
+
+  requestAnimationFrame(animCursor);
+}
+animCursor();
+
+/* ════════════════════════════════════════════════════════
+   AURORA BACKGROUND
+════════════════════════════════════════════════════════ */
+const aCanvas = document.getElementById('aurora-canvas');
+const aCtx = aCanvas.getContext('2d');
+let aW, aH, mxN = 0.5, myN = 0.5;
+
+function resizeAurora() {
+  aW = aCanvas.width  = aCanvas.offsetWidth;
+  aH = aCanvas.height = aCanvas.offsetHeight;
+}
+resizeAurora();
+window.addEventListener('resize', resizeAurora);
+
+document.addEventListener('mousemove', e => {
+  mxN = e.clientX / window.innerWidth;
+  myN = e.clientY / window.innerHeight;
+});
+
+let t = 0;
+function drawAurora() {
+  t += 0.003;
+  aCtx.clearRect(0, 0, aW, aH);
+
+  const blobs = [
+    { cx: aW * (0.3 + Math.sin(t * 0.7) * 0.15 + mxN * 0.1), cy: aH * (0.4 + Math.cos(t * 0.5) * 0.1 + myN * 0.05), r: aW * 0.35, c0: 'rgba(0,232,198,0.07)', c1: 'transparent' },
+    { cx: aW * (0.7 + Math.sin(t * 0.5 + 1) * 0.1 - mxN * 0.06), cy: aH * (0.6 + Math.cos(t * 0.8) * 0.15), r: aW * 0.28, c0: 'rgba(99,102,241,0.05)', c1: 'transparent' },
+    { cx: aW * (0.5 + Math.cos(t * 0.6) * 0.12), cy: aH * (0.3 + Math.sin(t) * 0.1), r: aW * 0.22, c0: 'rgba(245,158,11,0.04)', c1: 'transparent' },
+  ];
+  blobs.forEach(b => {
+    const g = aCtx.createRadialGradient(b.cx, b.cy, 0, b.cx, b.cy, b.r);
+    g.addColorStop(0, b.c0); g.addColorStop(1, b.c1);
+    aCtx.fillStyle = g;
+    aCtx.fillRect(0, 0, aW, aH);
+  });
+
+  // Subtle grid
+  aCtx.strokeStyle = 'rgba(0,232,198,0.025)';
+  aCtx.lineWidth = 0.5;
+  for (let x = 0; x < aW; x += 60) {
+    aCtx.beginPath(); aCtx.moveTo(x, 0); aCtx.lineTo(x, aH); aCtx.stroke();
+  }
+  for (let y = 0; y < aH; y += 60) {
+    aCtx.beginPath(); aCtx.moveTo(0, y); aCtx.lineTo(aW, y); aCtx.stroke();
+  }
+
+  requestAnimationFrame(drawAurora);
+}
+drawAurora();
+
+/* ════════════════════════════════════════════════════════
+   TICKER TAPE
+════════════════════════════════════════════════════════ */
+const tickerItems = [
+  '21.8% of model-pair comparisons show price reversal', '◆',
+  'Reversal magnitude reaches 28×', '◆',
+  'Gemini 3 Flash: 78% cheaper listed, 22% more expensive actual', '◆',
+  '900% more thinking tokens on same complex query', '◆',
+  'Removing thinking costs reduces reversals by 70%', '◆',
+  '8 frontier RLMs evaluated across 9 task categories', '◆',
+  'TrueCost Router: route by actual cost, not listed price', '◆',
+];
+
+const ti = document.getElementById('ticker-inner');
+const full = [...tickerItems, ...tickerItems].map(x =>
+  `<span class="ticker-item">${x === '◆' ? '<span class="sep">◆</span>' : x}</span>`
+).join('');
+ti.innerHTML = full + full;
+
+/* ════════════════════════════════════════════════════════
+   MARQUEE
+════════════════════════════════════════════════════════ */
+const marqueeItems = [
+  { t: '"The cheap model is actually expensive."', accent: null },
+  { t: '900% more thinking tokens', accent: '900%' },
+  { t: '"Listing price is not actual cost."', accent: null },
+  { t: 'Price reversals in 21.8% of comparisons', accent: '21.8%' },
+  { t: 'Route by TrueCost, not listed price', accent: null },
+  { t: '28× reversal magnitude observed', accent: '28×' },
+];
+const mi = document.getElementById('marquee-inner');
+const mHtml = [...marqueeItems, ...marqueeItems].map(item =>
+  `<div class="marquee-item">
+    <span>${item.t}</span>
+    ${item.accent ? `<span class="mi-amber">${item.accent}</span>` : ''}
+    <span class="mi-accent">——</span>
+  </div>`
+).join('');
+mi.innerHTML = mHtml + mHtml;
+
+/* ════════════════════════════════════════════════════════
+   HERO FLOAT CARD COUNTER ANIM
+════════════════════════════════════════════════════════ */
+function animCount(el, from, to, suffix, dur = 1800) {
+  const start = performance.now();
+  function step(now) {
+    const progress = Math.min((now - start) / dur, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const val = from + (to - from) * eased;
+    el.textContent = (Number.isInteger(to) ? Math.round(val) : val.toFixed(1)) + suffix;
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+setTimeout(() => {
+  animCount(document.getElementById('fc1'), 0, 21.8, '%');
+  animCount(document.getElementById('fc2'), 0, 28, '×', 1600);
+  animCount(document.getElementById('fc3'), 0, 900, '%', 2000);
+}, 1200);
+
+/* ════════════════════════════════════════════════════════
+   SCROLL REVEAL + STAT COUNTERS
+════════════════════════════════════════════════════════ */
+const srEls = document.querySelectorAll('.sr');
+const statCells = document.querySelectorAll('.stat-cell');
+const ctaEls = document.querySelectorAll('.cta-pre, .cta-h, .cta-sub, .cta-btns');
+
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    entry.target.classList.add('in');
+    // Stat counter
+    const numEl = entry.target.querySelector('[data-target]');
+    if (numEl) {
+      const target = parseFloat(numEl.dataset.target);
+      const suffix = numEl.dataset.suffix;
+      animCount(numEl, 0, target, suffix, 1800);
+    }
+    io.unobserve(entry.target);
+  });
+}, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+[...srEls, ...statCells, ...ctaEls].forEach(el => io.observe(el));
+
+/* ════════════════════════════════════════════════════════
+   TILT CARDS
+════════════════════════════════════════════════════════ */
+document.querySelectorAll('.tilt-card').forEach(card => {
+  card.addEventListener('mousemove', e => {
+    const r = card.getBoundingClientRect();
+    const x = e.clientX - r.left - r.width / 2;
+    const y = e.clientY - r.top - r.height / 2;
+    card.style.transform = `perspective(800px) rotateY(${x / r.width * 10}deg) rotateX(${-y / r.height * 8}deg) translateZ(8px)`;
+    card.style.transition = 'none';
+  });
+  card.addEventListener('mouseleave', () => {
+    card.style.transform = '';
+    card.style.transition = 'transform 0.5s cubic-bezier(0.34,1.56,0.64,1), background 0.4s';
+  });
+});
+
+/* ════════════════════════════════════════════════════════
+   MAGNETIC BUTTONS
+════════════════════════════════════════════════════════ */
+document.querySelectorAll('.mag-btn').forEach(btn => {
+  btn.addEventListener('mousemove', e => {
+    const r = btn.getBoundingClientRect();
+    const x = e.clientX - r.left - r.width / 2;
+    const y = e.clientY - r.top - r.height / 2;
+    btn.style.transform = `translate(${x * 0.18}px, ${y * 0.22}px)`;
+  });
+  btn.addEventListener('mouseleave', () => {
+    btn.style.transform = '';
+    btn.style.transition = 'transform 0.5s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.3s';
+  });
+  btn.addEventListener('mouseover', () => { btn.style.transition = 'none'; });
+  btn.addEventListener('click', e => {
+    const r = btn.getBoundingClientRect();
+    const rip = document.createElement('span');
+    rip.className = 'ripple';
+    rip.style.left = (e.clientX - r.left) + 'px';
+    rip.style.top  = (e.clientY - r.top)  + 'px';
+    btn.appendChild(rip);
+    setTimeout(() => rip.remove(), 700);
+  });
+});
+
+/* ════════════════════════════════════════════════════════
+   BRAIN CANVASES
+════════════════════════════════════════════════════════ */
+function makeBrain(id, color, speed) {
+  const c = document.getElementById(id);
+  const ctx = c.getContext('2d');
+  const nodes = Array.from({length: 8}, (_, i) => ({
+    angle: (i / 8) * Math.PI * 2,
+    orbitR: 38 + Math.random() * 12,
+    speed: (0.02 + Math.random() * 0.03) * speed,
+    dotR: 2 + Math.random(),
+  }));
+  function frame() {
+    ctx.clearRect(0, 0, 130, 130);
+    // glow ring
+    const g = ctx.createRadialGradient(65, 65, 5, 65, 65, 60);
+    g.addColorStop(0, color + '22');
+    g.addColorStop(1, 'transparent');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 130, 130);
+    // core
+    ctx.beginPath();
+    ctx.arc(65, 65, 12, 0, Math.PI * 2);
+    ctx.fillStyle = color + '33';
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.fill(); ctx.stroke();
+    // orbit nodes + lines
+    nodes.forEach(n => {
+      n.angle += n.speed;
+      const x = 65 + Math.cos(n.angle) * n.orbitR;
+      const y = 65 + Math.sin(n.angle) * n.orbitR;
+      ctx.beginPath(); ctx.moveTo(65, 65); ctx.lineTo(x, y);
+      ctx.strokeStyle = color + '18'; ctx.lineWidth = 0.8; ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(x, y, n.dotR, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.shadowColor = color; ctx.shadowBlur = 8;
+      ctx.fill(); ctx.shadowBlur = 0;
+    });
+    requestAnimationFrame(frame);
+  }
+  frame();
+}
+makeBrain('bc-small', '#f59e0b', 1);
+makeBrain('bc-large', '#00e8c6', 1);
+
+/* Brain simulation */
+let brainInterval = null;
+let bSmallCost = 0, bLargeCost = 0, bSmallTok = 0, bLargeTok = 0;
+
+document.getElementById('sim-btn').addEventListener('click', () => {
+  if (brainInterval) {
+    clearInterval(brainInterval);
+    brainInterval = null;
+    bSmallCost = bLargeCost = bSmallTok = bLargeTok = 0;
+    document.getElementById('sim-btn').textContent = '⚡ Simulate Complex Query';
+    ['bc-cost-s','bc-cost-l'].forEach(id => {
+      document.getElementById(id).textContent = '$0.0000';
+      document.getElementById(id).className = 'brain-cost neutral';
+    });
+    document.getElementById('bc-tok-s').textContent = '0 thinking tokens';
+    document.getElementById('bc-tok-l').textContent = '0 thinking tokens';
+    return;
+  }
+  document.getElementById('sim-btn').textContent = '⏹ Reset';
+  brainInterval = setInterval(() => {
+    const sD = 100 + Math.random() * 80;
+    const lD = 12 + Math.random() * 8;
+    bSmallTok += sD; bLargeTok += lD;
+    bSmallCost += sD * 0.00000022;
+    bLargeCost += lD * 0.000001;
+
+    const sEl = document.getElementById('bc-cost-s');
+    const lEl = document.getElementById('bc-cost-l');
+    sEl.textContent = '$' + bSmallCost.toFixed(4);
+    lEl.textContent = '$' + bLargeCost.toFixed(4);
+    sEl.className = 'brain-cost ' + (bSmallCost > bLargeCost ? 'danger' : 'neutral');
+    lEl.className = 'brain-cost ' + (bSmallCost > bLargeCost ? 'safe' : 'neutral');
+    document.getElementById('bc-tok-s').textContent = Math.round(bSmallTok).toLocaleString() + ' thinking tokens';
+    document.getElementById('bc-tok-l').textContent = Math.round(bLargeTok).toLocaleString() + ' thinking tokens';
+  }, 55);
+});
+
+/* ════════════════════════════════════════════════════════
+   SIMULATOR
+════════════════════════════════════════════════════════ */
+function calcFlash(c)  { return 0.10 * (1 + Math.pow(c, 2.5)) * 2000 / 1e6; }
+function calcGPT(c)    { return 0.80 * (1 + c * 0.2) * 2000 / 1e6; }
+function calcFlashTok(c){ return Math.round(2000 * (1 + Math.pow(c, 2.5))); }
+function calcGPTTok(c)  { return Math.round(2000 * (1 + c * 0.2)); }
+
+function buildBarChart(id, pairs, maxPx = 100) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const maxVal = Math.max(...pairs.map(p => p.v), 0.0001);
+  el.innerHTML = pairs.map(p => {
+    const h = Math.round((p.v / maxVal) * maxPx);
+    return `<div class="bar-col">
+      <div class="bar-track-v" style="height:${maxPx}px">
+        <div class="bar-v ${p.cls}" style="height:${h}px"></div>
+      </div>
+      <div class="bar-col-label">${p.label}</div>
+    </div>`;
+  }).join('');
+}
+
+function updateSim(c) {
+  c = parseFloat(c);
+  const f1k = calcFlash(c) * 1000;
+  const g1k = calcGPT(c)   * 1000;
+  const fTok = calcFlashTok(c);
+  const gTok = calcGPTTok(c);
+  const bloat = (fTok / gTok).toFixed(1);
+
+  document.getElementById('slider-display').textContent = c.toFixed(1);
+  document.getElementById('sm-flash').textContent = '$' + f1k.toFixed(3);
+  document.getElementById('sm-gpt').textContent   = '$' + g1k.toFixed(3);
+  const delta = f1k - g1k;
+  const dEl = document.getElementById('sm-delta');
+  dEl.textContent = (delta > 0 ? '+' : '') + '$' + delta.toFixed(3);
+  dEl.style.color = delta > 0 ? 'var(--rose)' : 'var(--teal)';
+  document.getElementById('sm-bloat').textContent = bloat + '×';
+
+  // Token chart
+  const cPts = [2, 4, 6, 8, 10];
+  const tokPairs = [];
+  cPts.forEach(cp => {
+    tokPairs.push({ v: calcFlashTok(cp), cls: 'ba', label: `F${cp}` });
+    tokPairs.push({ v: calcGPTTok(cp),   cls: 'bt', label: `G${cp}` });
+  });
+  buildBarChart('tok-chart', tokPairs);
+
+  // Cost chart
+  buildBarChart('cost-chart', [
+    { v: f1k, cls: f1k > g1k ? 'br' : 'ba', label: 'Flash' },
+    { v: g1k, cls: 'bt', label: 'GPT-5.2' },
+  ]);
+
+  document.getElementById('cc-flash').textContent = '$' + f1k.toFixed(3);
+  document.getElementById('cc-gpt').textContent   = '$' + g1k.toFixed(3);
+
+  const diffEl = document.getElementById('cc-diff');
+  if (f1k > g1k) {
+    const pct = ((f1k / g1k - 1) * 100).toFixed(0);
+    diffEl.textContent = '+' + pct + '% overpay';
+    diffEl.className = 'cc-val diff-neg';
+    document.getElementById('win-badge').textContent = '⚠ REVERSAL: Flash costs ' + pct + '% MORE than GPT-5.2';
+    document.getElementById('win-badge').className = 'win-badge large';
+    document.getElementById('reversal-box').textContent = '⚠ Above crossover. Use large model to save money.';
+    document.getElementById('reversal-box').className = 'reversal-box danger';
+  } else {
+    const save = ((g1k / f1k - 1) * 100).toFixed(0);
+    diffEl.textContent = '-' + save + '% saved';
+    diffEl.className = 'cc-val diff-pos';
+    document.getElementById('win-badge').textContent = '✓ Flash is optimal here — ' + save + '% cheaper';
+    document.getElementById('win-badge').className = 'win-badge small';
+    document.getElementById('reversal-box').textContent = '✓ Below crossover. Flash is genuinely cheaper here.';
+    document.getElementById('reversal-box').className = 'reversal-box safe';
+  }
+}
+
+const slider = document.getElementById('c-slider');
+slider.addEventListener('input', () => updateSim(slider.value));
+updateSim(3);
+
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    const c = parseFloat(chip.dataset.c);
+    slider.value = c;
+    updateSim(c);
+  });
+});
+
+/* ════════════════════════════════════════════════════════
+   LIVE ROUTER
+════════════════════════════════════════════════════════ */
+function scoreComplexity(p) {
+  let s = 0;
+  s += Math.min(p.length / 500, 3);
+  [/\bprove\b/i,/\bsynthesize\b/i,/\bcalculate\b/i,/\bderive\b/i,
+   /\boptimize\b/i,/\balgorithm\b/i,/\bstep.by.step\b/i,/\bminimize\b/i,
+   /\bmaximize\b/i,/\bimplement\b/i].forEach(rx => { if(rx.test(p)) s += 1.5; });
+  s += (p.match(/\?/g)||[]).length * 0.8;
+  if (/\b(math|proof|theorem|integral|differential)\b/i.test(p)) s += 2.0;
+  if (/\b(code|build|create|implement)\b/i.test(p)) s += 1.0;
+  return Math.min(s, 10);
+}
+
+document.getElementById('route-btn').addEventListener('click', () => {
+  const prompt = document.getElementById('live-prompt').value.trim();
+  if (!prompt) return;
+  const c = scoreComplexity(prompt);
+  const f = calcFlash(c), g = calcGPT(c);
+  const useLarge = f > g;
+  const winner = useLarge ? 'gpt-5.2' : 'gemini-3-flash';
+  const projCost = useLarge ? g : f;
+  const altCost  = useLarge ? f : g;
+  const savings  = ((altCost - projCost) / altCost * 100).toFixed(1);
+  const bloat    = (calcFlashTok(c) / calcGPTTok(c)).toFixed(1);
+
+  document.getElementById('ro-c').textContent = c.toFixed(2) + ' / 10';
+  document.getElementById('ro-m').textContent = winner;
+  document.getElementById('ro-p').textContent = '$' + (projCost * 1000).toFixed(4) + ' / 1K';
+  document.getElementById('ro-b').textContent = bloat + '× thinking-token multiplier';
+  document.getElementById('ro-s').textContent = savings + '% vs naive choice';
+  document.getElementById('ro-bar').style.width = (c * 10) + '%';
+  document.getElementById('ro-bar').style.background = useLarge ? 'var(--teal)' : 'var(--amber)';
+
+  const hdr = document.getElementById('ro-hdr');
+  hdr.textContent = useLarge
+    ? '→ ROUTE: GPT-5.2 — Complexity demands efficient reasoning'
+    : '→ ROUTE: Gemini 3 Flash — Low complexity, no bloat risk';
+  hdr.className = 'ro-header ' + (useLarge ? 'large' : 'small');
+  document.getElementById('route-out').classList.add('show');
+});
+
+/* ════════════════════════════════════════════════════════
+   ROI CALCULATOR
+════════════════════════════════════════════════════════ */
+document.getElementById('calc-btn').addEventListener('click', () => {
+  const dq = parseInt(document.getElementById('dq').value) || 10000;
+  const ac = parseFloat(document.getElementById('ac').value) || 6;
+  const cp = parseFloat(document.getElementById('cp').value) / 100 || 0.4;
+  const strategy = document.getElementById('strat').value;
+  const mq = dq * 30;
+  const complexQ = mq * cp, simpleQ = mq * (1 - cp);
+  const fC = calcFlash(ac), gC = calcGPT(ac);
+  const fS = calcFlash(2),  gS = calcGPT(2);
+
+  let current, optimised;
+  if (strategy === 'always-small') {
+    current   = complexQ * fC + simpleQ * fS;
+    optimised = complexQ * gC + simpleQ * fS;
+  } else if (strategy === 'always-large') {
+    current   = mq * gC;
+    optimised = complexQ * gC + simpleQ * fS;
+  } else {
+    current   = complexQ * (fC * 0.5 + gC * 0.5) + simpleQ * (fS * 0.5 + gS * 0.5);
+    optimised = complexQ * gC + simpleQ * fS;
+  }
+
+  const waste  = Math.abs(current - optimised);
+  const annual = waste * 12;
+  const fmt = v => v >= 1000 ? '$' + (v/1000).toFixed(1) + 'K' : '$' + v.toFixed(2);
+
+  document.getElementById('r-curr').textContent   = fmt(current);
+  document.getElementById('r-opt').textContent    = fmt(optimised);
+  document.getElementById('r-waste').textContent  = fmt(waste);
+  document.getElementById('r-waste-sub').textContent = (waste / current * 100).toFixed(1) + '% of your budget wasted monthly';
+  document.getElementById('r-annual').textContent = fmt(annual) + '/yr';
+  document.getElementById('roi-res').classList.add('lit');
+});
+
+/* ════════════════════════════════════════════════════════
+   CTA CANVAS
+════════════════════════════════════════════════════════ */
+const ctaCanvas = document.getElementById('cta-canvas');
+const cCtx = ctaCanvas.getContext('2d');
+function resizeCta() {
+  ctaCanvas.width  = ctaCanvas.offsetWidth;
+  ctaCanvas.height = ctaCanvas.offsetHeight;
+}
+resizeCta(); window.addEventListener('resize', resizeCta);
+
+const ctaParticles = Array.from({length: 60}, () => ({
+  x: Math.random() * 1400,
+  y: Math.random() * 800,
+  vx: (Math.random() - 0.5) * 0.3,
+  vy: (Math.random() - 0.5) * 0.3,
+  r: 0.8 + Math.random() * 1.5,
+  pulse: Math.random() * Math.PI * 2,
+}));
+
+function animCta() {
+  const W = ctaCanvas.width, H = ctaCanvas.height;
+  cCtx.clearRect(0, 0, W, H);
+  ctaParticles.forEach(p => {
+    p.pulse += 0.02;
+    p.x += p.vx; p.y += p.vy;
+    if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+    if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+    const a = 0.2 + 0.15 * Math.sin(p.pulse);
+    cCtx.beginPath();
+    cCtx.arc(p.x % W, p.y % H, p.r, 0, Math.PI * 2);
+    cCtx.fillStyle = `rgba(0,232,198,${a})`;
+    cCtx.fill();
+  });
+  // Central glow
+  const g = cCtx.createRadialGradient(W/2, H/2, 0, W/2, H/2, W * 0.4);
+  g.addColorStop(0, 'rgba(0,232,198,0.06)');
+  g.addColorStop(1, 'transparent');
+  cCtx.fillStyle = g;
+  cCtx.fillRect(0, 0, W, H);
+  requestAnimationFrame(animCta);
+}
+animCta();
+
+/* ════════════════════════════════════════════════════════
+   COPY BUTTON
+════════════════════════════════════════════════════════ */
+document.getElementById('copy-btn').addEventListener('click', () => {
+  const code = document.getElementById('code-body').innerText;
+  navigator.clipboard.writeText(code).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'Copied!';
+    btn.style.color = 'var(--teal)';
+    setTimeout(() => { btn.textContent = 'Copy'; btn.style.color = ''; }, 2000);
+  });
+});
+
+/* ════════════════════════════════════════════════════════
+   CODE BLOCK LINE ANIM
+════════════════════════════════════════════════════════ */
+const codeIo = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (!e.isIntersecting) return;
+    const lines = e.target.querySelectorAll('.code-line');
+    lines.forEach((line, i) => {
+      setTimeout(() => line.style.animationDelay = i * 0.04 + 's', 0);
+    });
+    codeIo.unobserve(e.target);
+  });
+}, { threshold: 0.1 });
+// (No individual line wrapping here — whole block fades in elegantly)
+</script>
+</body>
+</html>
